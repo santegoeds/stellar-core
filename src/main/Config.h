@@ -374,7 +374,8 @@ class Config : public std::enable_shared_from_this<Config>
 #ifdef BUILD_TESTS
     // If set to true, the application will be aware this run is for a test
     // case.  This is used right now in the signal handler to exit() instead of
-    // doing a graceful shutdown
+    // doing a graceful shutdown and in the Postgresql notification receiver
+    // to throw an exception for warning notifications.
     bool TEST_CASES_ENABLED;
 #endif
 

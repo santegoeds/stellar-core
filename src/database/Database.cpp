@@ -92,7 +92,31 @@ badPgVersion(int vers)
         << '.' << MIN_POSTGRESQL_MINOR_VERSION;
     return msg.str();
 }
-#endif
+
+static void
+pgNoticeReceiver(void* arg, const PGresult* res)
+{
+    if (res == nullptr)
+    {
+        return;
+    }
+    const std::string msg{PQresultErrorMessage(res)};
+
+#ifdef BUILD_TESTS
+    bool testCasesEnabled = static_cast<bool>(arg);
+    if (testCasesEnabled)
+    {
+        std::string prefix{PQresultErrorField(res, PG_DIAG_SEVERITY)};
+        if (prefix == "WARNING")
+        {
+            throw soci::soci_error(msg);
+        }
+    }
+#endif // BUILD_TESTS
+
+    CLOG(WARNING, "Database") << msg;
+}
+#endif // USE_POSTGRES
 
 static std::string
 badSqliteVersion(int vers)
@@ -124,9 +148,11 @@ Database::registerDrivers()
 class DatabaseConfigureSessionOp : public DatabaseTypeSpecificOperation<void>
 {
     soci::session& mSession;
+    const Config& mCfg;
 
   public:
-    DatabaseConfigureSessionOp(soci::session& sess) : mSession(sess)
+    DatabaseConfigureSessionOp(soci::session& sess, const Config& cfg)
+        : mSession(sess), mCfg(cfg)
     {
     }
     void
@@ -168,6 +194,10 @@ class DatabaseConfigureSessionOp : public DatabaseTypeSpecificOperation<void>
         {
             throw std::runtime_error(badPgVersion(vers));
         }
+
+        PQsetNoticeReceiver(pg->conn_, pgNoticeReceiver,
+                            reinterpret_cast<void*>(mCfg.TEST_CASES_ENABLED));
+
         mSession
             << "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL "
                "SERIALIZABLE";
@@ -192,7 +222,7 @@ Database::Database(Application& app)
                            << removePasswordFromConnectionString(
                                   app.getConfig().DATABASE.value);
     mSession.open(app.getConfig().DATABASE.value);
-    DatabaseConfigureSessionOp op(mSession);
+    DatabaseConfigureSessionOp op(mSession, mApp.getConfig());
     doDatabaseTypeSpecificOperation(op);
 }
 
@@ -503,7 +533,7 @@ Database::getPool()
             LOG(DEBUG) << "Opening pool entry " << i;
             soci::session& sess = mPool->at(i);
             sess.open(c.value);
-            DatabaseConfigureSessionOp op(sess);
+            DatabaseConfigureSessionOp op(sess, mApp.getConfig());
             doDatabaseTypeSpecificOperation(op);
         }
     }
