@@ -89,14 +89,6 @@ ccache -s
 date
 time ./autogen.sh
 time ./configure $config_flags
-make format
-d=`git diff | wc -l`
-if [ $d -ne 0 ]
-then
-    echo "clang format must be run as part of the pull request, current diff:"
-    git diff
-    exit 1
-fi
 
 date
 time make -j$(($NPROCS + 1))

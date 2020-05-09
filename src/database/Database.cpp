@@ -102,6 +102,8 @@ pgNoticeReceiver(void* arg, const PGresult* res)
     }
     const std::string msg{PQresultErrorMessage(res)};
 
+    CLOG(WARNING, "Database") << msg;
+
 #ifdef BUILD_TESTS
     bool testCasesEnabled = static_cast<bool>(arg);
     if (testCasesEnabled)
@@ -113,8 +115,6 @@ pgNoticeReceiver(void* arg, const PGresult* res)
         }
     }
 #endif // BUILD_TESTS
-
-    CLOG(WARNING, "Database") << msg;
 }
 #endif // USE_POSTGRES
 
